@@ -6,636 +6,203 @@
 <meta name="color-scheme" content="dark">
 <title>Stocks</title>
 <style>
-:root {
---bg: #0d1117;
---card: #161b22;
---card2: #1c2230;
---line: #283041;
---text: #e6edf3;
---muted: #8b949e;
---up: #3fb950;
---down: #f85149;
---accent: #2f81f7;
-}
-* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-html, body { margin: 0; padding: 0; }
-body {
-background: var(--bg);
-color: var(--text);
-font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-font-size: 16px;
-padding-bottom: 40px;
-}
-header {
-position: sticky;
-top: 0;
-z-index: 10;
-background: var(--bg);
-border-bottom: 1px solid var(--line);
-padding: 12px 12px 10px;
-}
-.titlebar {
-display: flex;
-align-items: center;
-justify-content: space-between;
-margin-bottom: 10px;
-}
-.titlebar h1 { font-size: 20px; margin: 0; font-weight: 700; }
-.refresh-btn {
-background: var(--card2);
-border: 1px solid var(--line);
-color: var(--text);
-border-radius: 8px;
-padding: 7px 12px;
-font-size: 14px;
-}
-.refresh-btn:active { background: var(--line); }
-.addbar { display: flex; gap: 8px; }
-.addbar input {
-flex: 1;
-background: var(--card);
-border: 1px solid var(--line);
-color: var(--text);
-border-radius: 10px;
-padding: 12px 14px;
-font-size: 16px;
-text-transform: uppercase;
-}
-.addbar input::placeholder { color: var(--muted); text-transform: none; }
-.addbar button {
-background: var(--accent);
-border: none;
-color: #fff;
-border-radius: 10px;
-padding: 0 18px;
-font-size: 16px;
-font-weight: 600;
-}
-.addbar button:active { opacity: 0.8; }
-#status {
-font-size: 12px;
-color: var(--muted);
-margin-top: 8px;
-min-height: 14px;
-}
+:root { --bg: #0d1117; --card: #161b22; --card2: #1c2230; --line: #283041; --text: #e6edf3; --muted: #8b949e; --up: #3fb950; --down: #f85149; --accent: #2f81f7; }
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--text); font-family: -apple-system, sans-serif; font-size: 16px; margin: 0; padding-bottom: 40px; }
+header { position: sticky; top: 0; z-index: 10; background: var(--bg); border-bottom: 1px solid var(--line); padding: 12px; }
+.addbar { display: flex; gap: 8px; margin-top: 10px; }
+.addbar input { flex: 1; background: var(--card); border: 1px solid var(--line); color: var(--text); border-radius: 10px; padding: 12px; text-transform: uppercase; }
+.addbar button { background: var(--accent); border: none; color: #fff; border-radius: 10px; padding: 0 18px; font-weight: 600; }
 #list { padding: 8px 10px; }
-.row {
-background: var(--card);
-border: 1px solid var(--line);
-border-radius: 12px;
-margin-bottom: 10px;
-overflow: hidden;
-}
-.row-main {
-display: flex;
-align-items: center;
-gap: 10px;
-padding: 12px;
-cursor: pointer;
-}
-.sym-block { min-width: 0; flex: 1; }
-.sym { font-size: 16px; font-weight: 700; letter-spacing: 0.3px; }
-.name {
-font-size: 12px;
-color: var(--muted);
-white-space: nowrap;
-overflow: hidden;
-text-overflow: ellipsis;
-margin-top: 2px;
-}
+.row { background: var(--card); border: 1px solid var(--line); border-radius: 12px; margin-bottom: 10px; overflow: hidden; cursor: grab; }
+.row.dragging { opacity: 0.5; }
+.row-main { display: flex; align-items: center; gap: 10px; padding: 12px; cursor: pointer; }
 .spark { width: 76px; height: 38px; flex: none; }
-.price-block { text-align: right; min-width: 96px; }
-.price { font-size: 16px; font-weight: 700; font-variant-numeric: tabular-nums; }
-.chg { font-size: 12px; font-variant-numeric: tabular-nums; margin-top: 2px; }
+.price-block { display: flex; flex-direction: column; align-items: flex-end; min-width: 160px; padding-left: 20px; }
+.price-line { font-size: 15px; font-weight: 700; }
+.chg { font-size: 12px; font-weight: 500; }
+.ext-row { font-size: 11px; margin-top: 2px; color: var(--muted); }
 .up { color: var(--up); }
 .down { color: var(--down); }
-.tag {
-display: inline-block;
-font-size: 9px;
-font-weight: 700;
-padding: 1px 5px;
-border-radius: 4px;
-margin-left: 4px;
-vertical-align: middle;
-background: var(--card2);
-color: var(--muted);
-border: 1px solid var(--line);
-}
-.tag.pre { color: #d29922; border-color: #5a4711; }
-.tag.post { color: #a371f7; border-color: #432a72; }
-.remove {
-background: transparent;
-border: none;
-color: var(--muted);
-font-size: 20px;
-line-height: 1;
-padding: 4px 6px;
-flex: none;
-}
-.remove:active { color: var(--down); }
-.err { font-size: 12px; color: var(--down); }
-.row-detail {
-display: none;
-padding: 0 12px 14px;
-border-top: 1px solid var(--line);
-}
+.tag { font-size: 9px; font-weight: 700; padding: 0 4px; border-radius: 4px; background: var(--card2); border: 1px solid var(--line); }
+.remove-btn { background: transparent; border: none; color: var(--muted); font-size: 20px; cursor: pointer; padding: 5px; }
+.row-detail { display: none; padding: 12px; border-top: 1px solid var(--line); }
 .row.open .row-detail { display: block; }
-.tabs {
-display: flex;
-gap: 6px;
-margin: 12px 0;
-flex-wrap: wrap;
-}
-.tab {
-background: var(--card2);
-border: 1px solid var(--line);
-color: var(--muted);
-border-radius: 999px;
-padding: 6px 14px;
-font-size: 13px;
-}
+.tabs { display: flex; gap: 6px; margin-bottom: 12px; overflow-x: auto; }
+.tab { background: var(--card2); border: 1px solid var(--line); color: var(--muted); border-radius: 999px; padding: 6px 12px; font-size: 12px; cursor: pointer; }
 .tab.active { background: var(--accent); color: #fff; border-color: var(--accent); }
-.bigchart { width: 100%; height: 180px; display: block; }
-.detail-meta {
-display: flex;
-justify-content: space-between;
-font-size: 12px;
-color: var(--muted);
-margin-top: 8px;
-flex-wrap: wrap;
-gap: 6px 16px;
-}
-.detail-meta b { color: var(--text); font-weight: 600; }
-.empty { text-align: center; color: var(--muted); padding: 40px 20px; font-size: 14px; }
-.spin { display: inline-block; animation: spin 0.8s linear infinite; }
-@keyframes spin { to { transform: rotate(360deg); } }
+.bigchart { width: 100%; height: 180px; display: block; touch-action: none; }
+.meta-display { font-size: 13px; font-weight: 600; text-align: center; margin-top: 10px; color: var(--text); }
 </style>
 </head>
 <body>
 <header>
-<div class="titlebar">
-<h1>Stocks</h1>
-<button class="refresh-btn" id="refreshBtn">Refresh</button>
-</div>
-<div class="addbar">
-<input id="addInput" placeholder="Add ticker (e.g. NVDA)" autocomplete="off" autocapitalize="characters" spellcheck="false">
-<button id="addBtn">Add</button>
-</div>
-<div id="status"></div>
+    <div style="display:flex; justify-content:space-between; align-items:center;"><h1>Stocks</h1><button id="refreshBtn">Refresh</button></div>
+    <div class="addbar"><input id="addInput" placeholder="Add ticker"><button id="addBtn">Add</button></div>
 </header>
 <div id="list"></div>
 
 <script>
 "use strict";
-
 const STORE_KEY = "stocksWatchlist";
-const DEFAULTS = ["AAPL", "MSFT", "TSLA"];
+let watchlist = JSON.parse(localStorage.getItem(STORE_KEY) || '["AAPL", "MSFT", "TSLA"]');
 
-// Public CORS proxies tried in order. {build:(url)=>proxiedUrl}
-const PROXIES = [
-u => "https://corsproxy.io/?url=" + encodeURIComponent(u),
-u => "https://api.allorigins.win/raw?url=" + encodeURIComponent(u),
-u => "https://thingproxy.freeboard.io/fetch/" + u,
-u => "https://api.codetabs.com/v1/proxy/?quest=" + encodeURIComponent(u),
-];
-
-const TIMEFRAMES = {
-"1D": { range: "1d", interval: "2m" },
-"1W": { range: "5d", interval: "15m" },
-"1M": { range: "1mo", interval: "1d" },
-"3M": { range: "3mo", interval: "1d" },
-"1Y": { range: "1y", interval: "1d" },
-};
-
-const listEl = document.getElementById("list");
-const statusEl = document.getElementById("status");
-const addInput = document.getElementById("addInput");
-
-let watchlist = loadWatchlist();
-const cache = {}; // symbol -> last parsed quote {price, prevClose, ...}
-let working = 0;
-
-/* ---------- persistence ---------- */
-function loadWatchlist() {
-try {
-const raw = localStorage.getItem(STORE_KEY);
-if (raw) {
-const arr = JSON.parse(raw);
-if (Array.isArray(arr) && arr.length) return arr.map(s => String(s).toUpperCase());
-}
-} catch (e) {}
-return DEFAULTS.slice();
-}
-function saveWatchlist() {
-try { localStorage.setItem(STORE_KEY, JSON.stringify(watchlist)); } catch (e) {}
+async function fetchYahoo(sym, range="1d", interval="2m") {
+    const proxies = ["https://corsproxy.io/?url=", "https://api.allorigins.win/raw?url="];
+    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${sym}?range=${range}&interval=${interval}&includePrePost=true&_=${Date.now()}`;
+    for(const p of proxies) {
+        try {
+            const res = await fetch(p + encodeURIComponent(url));
+            const json = await res.json();
+            const resData = json.chart.result[0];
+            const meta = resData.meta;
+            const quotes = resData.indicators.quote[0].close.filter(q => q !== null);
+            return { regPrice: meta.regularMarketPrice, extPrice: quotes[quotes.length-1], prevClose: meta.previousClose, currency: meta.currency, points: quotes };
+        } catch(e) { continue; }
+    }
 }
 
-/* ---------- fetching ---------- */
-function yahooUrl(symbol, range, interval) {
-return "https://query1.finance.yahoo.com/v8/finance/chart/" +
-encodeURIComponent(symbol) +
-"?range=" + range + "&interval=" + interval + "&includePrePost=true";
+function draw(canvas, data, isUp, touches = [], showGrid = false, isMini = false) {
+    const ctx = canvas.getContext("2d");
+    const w = canvas.width, h = canvas.height;
+    const paddingRight = showGrid ? 50 : 0;
+    const plotW = w - paddingRight;
+    
+    ctx.clearRect(0, 0, w, h);
+    const valid = data.filter(n => n);
+    const min = Math.min(...valid), max = Math.max(...valid);
+    
+    if (showGrid) {
+        ctx.strokeStyle = "#283041"; ctx.lineWidth = 1; ctx.font = "10px sans-serif"; ctx.fillStyle = "#8b949e";
+        for (let i = 0; i <= 4; i++) {
+            const y = h - (i / 4) * h;
+            const val = min + (i / 4) * (max - min);
+            ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(plotW, y); ctx.stroke();
+            ctx.fillText(val.toFixed(2), plotW + 5, y + 3);
+        }
+    }
+
+    ctx.strokeStyle = isUp ? "#3fb950" : "#f85149";
+    ctx.lineWidth = isMini ? 1 : 2; 
+    ctx.beginPath();
+    data.forEach((val, i) => {
+        const x = (i / (data.length - 1)) * plotW;
+        const y = h - ((val - min) / (max - min)) * h;
+        if(val) i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+
+    touches.forEach(t => {
+        ctx.strokeStyle = "#fff"; ctx.setLineDash([5, 5]);
+        ctx.beginPath(); ctx.moveTo(t.x, 0); ctx.lineTo(t.x, h); ctx.stroke(); ctx.setLineDash([]);
+        ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.arc(t.x, t.y, 5, 0, Math.PI*2); ctx.fill();
+    });
 }
 
-// Fetch with proxy fallback. Returns parsed JSON or throws.
-async function fetchJson(targetUrl) {
-let lastErr;
-for (const make of PROXIES) {
-const purl = make(targetUrl);
-try {
-const res = await fetch(purl, { method: "GET" });
-if (!res.ok) { lastErr = new Error("HTTP " + res.status); continue; }
-const text = await res.text();
-let json;
-try { json = JSON.parse(text); }
-catch (e) { lastErr = new Error("Bad JSON (blocked?)"); continue; }
-if (json && json.chart) return json;
-lastErr = new Error("No data");
-} catch (e) {
-lastErr = e;
-}
-}
-throw lastErr || new Error("All proxies failed");
-}
+async function render() {
+    const list = document.getElementById("list");
+    list.innerHTML = "";
+    watchlist.forEach((sym, index) => {
+        const row = document.createElement("div");
+        row.className = "row";
+        row.draggable = true;
+        row.dataset.index = index;
+        row.innerHTML = `<div class="row-main">
+                            <div style="font-weight:700; flex:1">${sym}</div>
+                            <canvas class="spark" width="76" height="38"></canvas>
+                            <div class="price-block">
+                                <div class="price-line">--</div>
+                                <div class="ext-row"></div>
+                            </div>
+                            <button class="remove-btn" title="Remove">&times;</button>
+                         </div>
+                         <div class="row-detail"><div class="tabs"></div><canvas class="bigchart" width="450" height="180"></canvas><div class="meta-display">Place 2 fingers to measure</div></div>`;
+        
+        row.ondragstart = (e) => { e.dataTransfer.setData("text/plain", index); row.classList.add("dragging"); };
+        row.ondragend = () => row.classList.remove("dragging");
+        row.ondragover = (e) => e.preventDefault();
+        row.ondrop = (e) => {
+            e.preventDefault();
+            const fromIndex = parseInt(e.dataTransfer.getData("text/plain"));
+            const movedItem = watchlist.splice(fromIndex, 1)[0];
+            watchlist.splice(index, 0, movedItem);
+            localStorage.setItem(STORE_KEY, JSON.stringify(watchlist));
+            render();
+        };
 
-// Parse a Yahoo chart response into a friendly object.
-function parseChart(json) {
-const result = json && json.chart && json.chart.result && json.chart.result[0];
-if (!result) {
-const err = json && json.chart && json.chart.error;
-throw new Error(err && err.description ? err.description : "Unknown symbol");
-}
-const meta = result.meta || {};
-const ts = result.timestamp || [];
-const quote = (result.indicators && result.indicators.quote && result.indicators.quote[0]) || {};
-const closes = quote.close || [];
+        row.querySelector(".remove-btn").onclick = (e) => { e.stopPropagation(); watchlist.splice(index, 1); localStorage.setItem(STORE_KEY, JSON.stringify(watchlist)); render(); };
+        row.querySelector(".row-main").onclick = () => { row.classList.toggle("open"); if(row.classList.contains("open") && !row.dataset.loaded) { loadDetail(row, sym); row.dataset.loaded = "1"; } };
+        
+        list.appendChild(row);
 
-// Build clean point series (drop nulls).
-const points = [];
-for (let i = 0; i < ts.length; i++) {
-const c = closes[i];
-if (c != null && isFinite(c)) points.push({ t: ts[i], c: c });
-}
-
-const state = meta.marketState || "";
-let price = meta.regularMarketPrice;
-let tag = "";
-// Extended hours: prefer latest available point as displayed price.
-if ((state === "PRE" || state === "POST" || state === "PREPRE" || state === "POSTPOST") && points.length) {
-price = points[points.length - 1].c;
-tag = state.indexOf("PRE") === 0 ? "PRE" : "POST";
-}
-if (price == null && points.length) price = points[points.length - 1].c;
-
-const prevClose = (meta.chartPreviousClose != null) ? meta.chartPreviousClose
-: (meta.previousClose != null) ? meta.previousClose
-: (points.length ? points[0].c : null);
-
-return {
-symbol: meta.symbol || "",
-name: meta.shortName || meta.longName || meta.symbol || "",
-currency: meta.currency || "",
-price: price,
-prevClose: prevClose,
-state: state,
-tag: tag,
-points: points,
-};
+        fetchYahoo(sym).then(q => {
+            const dayDiff = q.regPrice - q.prevClose;
+            const dayPct = (dayDiff / q.prevClose) * 100;
+            const isUp = dayDiff >= 0;
+            draw(row.querySelector(".spark"), q.points, isUp, [], false, true);
+            row.querySelector(".price-line").innerHTML = `${(q.currency==="USD"?"$":"") + q.regPrice.toFixed(2)} <span class="chg ${isUp?"up":"down"}">${dayDiff > 0 ? "+" : ""}${dayDiff.toFixed(2)} (${dayPct.toFixed(2)}%)</span>`;
+            
+            const extDiff = q.extPrice - q.regPrice;
+            if (Math.abs(extDiff) > 0.01) {
+                const extPct = (extDiff / q.regPrice) * 100;
+                row.querySelector(".ext-row").innerHTML = `<span class="tag">EXT</span> ${(q.currency==="USD"?"$":"") + q.extPrice.toFixed(2)} <span class="${extDiff >= 0 ? "up" : "down"}">${extDiff > 0 ? "+" : ""}${extDiff.toFixed(2)} (${extPct.toFixed(2)}%)</span>`;
+            }
+        });
+    });
 }
 
-async function getQuote(symbol, range, interval) {
-const json = await fetchJson(yahooUrl(symbol, range, interval));
-return parseChart(json);
+function loadDetail(row, sym) {
+    const tabs = { "1D": ["1d","2m"], "1W": ["5d","15m"], "1M": ["1mo","1d"], "YTD": ["ytd","1d"], "1Y": ["1y","1d"], "5Y": ["5y","1wk"] };
+    const tabsEl = row.querySelector(".tabs");
+    const canvas = row.querySelector(".bigchart");
+    const metaEl = row.querySelector(".meta-display");
+    let currentData = [];
+
+    Object.keys(tabs).forEach(t => {
+        const btn = document.createElement("div");
+        btn.className = "tab" + (t==="1D"?" active":"");
+        btn.textContent = t;
+        btn.onclick = async () => {
+            row.querySelectorAll(".tab").forEach(b => b.classList.remove("active"));
+            btn.classList.add("active");
+            const q = await fetchYahoo(sym, tabs[t][0], tabs[t][1]);
+            currentData = q.points;
+            draw(canvas, currentData, currentData[currentData.length-1] >= currentData[0], [], true, false);
+            const start = currentData[0], end = currentData[currentData.length-1], high = Math.max(...currentData), low = Math.min(...currentData);
+            const diff = end - start, pct = (diff / start) * 100;
+            metaEl.innerHTML = `Perf: <span class="${diff>=0?'up':'down'}">${diff>0?'+':''}${diff.toFixed(2)} (${pct.toFixed(2)}%)</span> | H: $${high.toFixed(2)} | L: $${low.toFixed(2)}`;
+        };
+        tabsEl.appendChild(btn);
+    });
+    
+    canvas.ontouchmove = (e) => {
+        if(e.touches.length === 2) {
+            e.preventDefault();
+            const rect = canvas.getBoundingClientRect();
+            const pts = [];
+            const plotW = canvas.width - 50;
+            for(let t of e.touches) {
+                const x = Math.max(0, Math.min(plotW, t.clientX - rect.left));
+                const idx = Math.floor((x / plotW) * currentData.length);
+                const clampedIdx = Math.max(0, Math.min(currentData.length - 1, idx));
+                pts.push({ x: x, y: canvas.height - ((currentData[clampedIdx] - Math.min(...currentData)) / (Math.max(...currentData) - Math.min(...currentData))) * canvas.height, val: currentData[clampedIdx] });
+            }
+            pts.sort((a,b) => a.x - b.x);
+            draw(canvas, currentData, currentData[currentData.length-1] >= currentData[0], pts, true, false);
+            const diff = pts[1].val - pts[0].val;
+            const pct = (diff / pts[0].val) * 100;
+            metaEl.innerHTML = `L: $${pts[0].val.toFixed(2)} | R: $${pts[1].val.toFixed(2)} | Diff: <span class="${diff>=0?'up':'down'}">${diff>0?'+':''}${diff.toFixed(2)} (${pct.toFixed(2)}%)</span>`;
+        }
+    };
+    row.querySelector(".tab").onclick();
 }
 
-/* ---------- formatting ---------- */
-function fmtPrice(v, cur) {
-if (v == null || !isFinite(v)) return "--";
-const n = v >= 1000 ? v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-: v.toFixed(2);
-const sym = cur === "USD" ? "$" : "";
-return sym + n;
-}
-function changeInfo(price, prev) {
-if (price == null || prev == null || !isFinite(price) || !isFinite(prev) || prev === 0) {
-return { abs: 0, pct: 0, dir: 0, text: "--" };
-}
-const abs = price - prev;
-const pct = (abs / prev) * 100;
-const dir = abs > 0 ? 1 : abs < 0 ? -1 : 0;
-const sign = abs > 0 ? "+" : "";
-const text = sign + abs.toFixed(2) + " (" + sign + pct.toFixed(2) + "%)";
-return { abs, pct, dir, text };
-}
-
-/* ---------- charts ---------- */
-function drawChart(canvas, points, dir, opts) {
-opts = opts || {};
-const dpr = window.devicePixelRatio || 1;
-const w = canvas.clientWidth || parseInt(canvas.getAttribute("width")) || 76;
-const h = canvas.clientHeight || parseInt(canvas.getAttribute("height")) || 38;
-canvas.width = Math.round(w * dpr);
-canvas.height = Math.round(h * dpr);
-const ctx = canvas.getContext("2d");
-ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-ctx.clearRect(0, 0, w, h);
-
-if (!points || points.length < 2) {
-ctx.fillStyle = "#8b949e";
-ctx.font = "11px sans-serif";
-ctx.textAlign = "center";
-ctx.fillText("no data", w / 2, h / 2 + 4);
-return;
-}
-
-const pad = opts.pad != null ? opts.pad : 2;
-const vals = points.map(p => p.c);
-let min = Math.min.apply(null, vals);
-let max = Math.max.apply(null, vals);
-if (min === max) { min -= 1; max += 1; }
-const padTop = pad + (opts.labels ? 4 : 0);
-const padBot = pad + (opts.labels ? 4 : 0);
-const plotH = h - padTop - padBot;
-const n = points.length;
-const x = i => pad + (i / (n - 1)) * (w - pad * 2);
-const y = v => padTop + (1 - (v - min) / (max - min)) * plotH;
-
-const color = dir > 0 ? "#3fb950" : dir < 0 ? "#f85149" : "#8b949e";
-
-// baseline (previous close) for big chart
-if (opts.baseline != null && isFinite(opts.baseline) && opts.baseline >= min && opts.baseline <= max) {
-ctx.strokeStyle = "rgba(139,148,158,0.35)";
-ctx.lineWidth = 1;
-ctx.setLineDash([4, 4]);
-ctx.beginPath();
-ctx.moveTo(pad, y(opts.baseline));
-ctx.lineTo(w - pad, y(opts.baseline));
-ctx.stroke();
-ctx.setLineDash([]);
-}
-
-// fill gradient under line
-if (opts.fill) {
-const grad = ctx.createLinearGradient(0, padTop, 0, h - padBot);
-grad.addColorStop(0, dir < 0 ? "rgba(248,81,73,0.28)" : "rgba(63,185,80,0.28)");
-grad.addColorStop(1, "rgba(0,0,0,0)");
-ctx.beginPath();
-ctx.moveTo(x(0), y(points[0].c));
-for (let i = 1; i < n; i++) ctx.lineTo(x(i), y(points[i].c));
-ctx.lineTo(x(n - 1), h - padBot);
-ctx.lineTo(x(0), h - padBot);
-ctx.closePath();
-ctx.fillStyle = grad;
-ctx.fill();
-}
-
-ctx.strokeStyle = color;
-ctx.lineWidth = opts.lineWidth || 1.5;
-ctx.lineJoin = "round";
-ctx.beginPath();
-ctx.moveTo(x(0), y(points[0].c));
-for (let i = 1; i < n; i++) ctx.lineTo(x(i), y(points[i].c));
-ctx.stroke();
-}
-
-/* ---------- rendering ---------- */
-function buildRow(symbol) {
-const row = document.createElement("div");
-row.className = "row";
-row.dataset.symbol = symbol;
-row.innerHTML =
-'<div class="row-main">' +
-'<div class="sym-block">' +
-'<div class="sym">' + symbol + '</div>' +
-'<div class="name">Loading…</div>' +
-'</div>' +
-'<canvas class="spark" width="76" height="38"></canvas>' +
-'<div class="price-block">' +
-'<div class="price">--</div>' +
-'<div class="chg">&nbsp;</div>' +
-'</div>' +
-'<button class="remove" title="Remove">&times;</button>' +
-'</div>' +
-'<div class="row-detail">' +
-'<div class="tabs"></div>' +
-'<canvas class="bigchart"></canvas>' +
-'<div class="detail-meta"></div>' +
-'</div>';
-
-const main = row.querySelector(".row-main");
-const removeBtn = row.querySelector(".remove");
-
-removeBtn.addEventListener("click", e => {
-e.stopPropagation();
-removeSymbol(symbol);
+document.getElementById("addBtn").addEventListener("click", () => {
+    const val = document.getElementById("addInput").value.toUpperCase();
+    if(val && !watchlist.includes(val)) { watchlist.push(val); localStorage.setItem(STORE_KEY, JSON.stringify(watchlist)); render(); }
 });
-
-main.addEventListener("click", () => toggleExpand(row));
-
-return row;
-}
-
-function renderList() {
-listEl.innerHTML = "";
-if (!watchlist.length) {
-listEl.innerHTML = '<div class="empty">No stocks yet. Add a ticker above.</div>';
-return;
-}
-watchlist.forEach(sym => listEl.appendChild(buildRow(sym)));
-}
-
-function applyQuoteToRow(row, q) {
-const nameEl = row.querySelector(".name");
-const priceEl = row.querySelector(".price");
-const chgEl = row.querySelector(".chg");
-const spark = row.querySelector(".spark");
-
-nameEl.textContent = q.name || row.dataset.symbol;
-nameEl.classList.remove("err");
-
-const ci = changeInfo(q.price, q.prevClose);
-priceEl.innerHTML = fmtPrice(q.price, q.currency) +
-(q.tag ? '<span class="tag ' + q.tag.toLowerCase() + '">' + q.tag + '</span>' : "");
-chgEl.textContent = ci.text;
-chgEl.className = "chg " + (ci.dir > 0 ? "up" : ci.dir < 0 ? "down" : "");
-
-drawChart(spark, q.points, ci.dir, { fill: false, lineWidth: 1.5, pad: 2 });
-}
-
-function showRowError(row, msg) {
-const nameEl = row.querySelector(".name");
-nameEl.textContent = "⚠ " + msg + " — tap to retry";
-nameEl.classList.add("err");
-}
-
-/* ---------- data flow ---------- */
-async function refreshSymbol(symbol) {
-const row = listEl.querySelector('.row[data-symbol="' + cssEsc(symbol) + '"]');
-try {
-const q = await getQuote(symbol, "1d", "2m");
-cache[symbol] = q;
-if (row) applyQuoteToRow(row, q);
-return q;
-} catch (e) {
-if (row) showRowError(row, (e && e.message) || "fetch failed");
-throw e;
-}
-}
-
-async function refreshAll() {
-if (!watchlist.length) return;
-setBusy(true, "Updating…");
-let ok = 0, fail = 0;
-// sequential to be gentle on free proxies
-for (const sym of watchlist) {
-try { await refreshSymbol(sym); ok++; }
-catch (e) { fail++; }
-}
-setBusy(false, statusLine(ok, fail));
-}
-
-function statusLine(ok, fail) {
-const now = new Date().toLocaleTimeString();
-let s = "Updated " + now;
-if (fail) s += " • " + fail + " failed (proxy may be blocked)";
-return s;
-}
-
-function setBusy(on, msg) {
-working = on ? working + 1 : Math.max(0, working - 1);
-if (msg != null) statusEl.innerHTML = (working > 0 ? '<span class="spin">↻</span> ' : "") + msg;
-}
-
-/* ---------- expand / timeframe ---------- */
-async function toggleExpand(row) {
-const open = row.classList.contains("open");
-// close others
-listEl.querySelectorAll(".row.open").forEach(r => { if (r !== row) r.classList.remove("open"); });
-if (open) { row.classList.remove("open"); return; }
-row.classList.add("open");
-
-const tabsEl = row.querySelector(".tabs");
-if (!tabsEl.dataset.built) {
-Object.keys(TIMEFRAMES).forEach((label, idx) => {
-const b = document.createElement("button");
-b.className = "tab" + (idx === 0 ? " active" : "");
-b.textContent = label;
-b.addEventListener("click", e => {
-e.stopPropagation();
-tabsEl.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
-b.classList.add("active");
-loadTimeframe(row, label);
-});
-tabsEl.appendChild(b);
-});
-tabsEl.dataset.built = "1";
-}
-const active = tabsEl.querySelector(".tab.active");
-loadTimeframe(row, active ? active.textContent : "1D");
-}
-
-async function loadTimeframe(row, label) {
-const symbol = row.dataset.symbol;
-const tf = TIMEFRAMES[label] || TIMEFRAMES["1D"];
-const big = row.querySelector(".bigchart");
-const meta = row.querySelector(".detail-meta");
-meta.innerHTML = '<span class="spin">↻</span> loading ' + label + '…';
-try {
-const q = await getQuote(symbol, tf.range, tf.interval);
-if (!row.classList.contains("open")) return;
-const ci = changeInfo(q.price, q.prevClose);
-drawChart(big, q.points, ci.dir, {
-fill: true,
-lineWidth: 2,
-pad: 6,
-baseline: label === "1D" ? q.prevClose : null,
-});
-const hi = q.points.length ? Math.max.apply(null, q.points.map(p => p.c)) : null;
-const lo = q.points.length ? Math.min.apply(null, q.points.map(p => p.c)) : null;
-meta.innerHTML =
-'<span>Last <b>' + fmtPrice(q.price, q.currency) + '</b></span>' +
-'<span class="' + (ci.dir > 0 ? "up" : ci.dir < 0 ? "down" : "") + '">' + ci.text + '</span>' +
-'<span>H <b>' + fmtPrice(hi, q.currency) + '</b></span>' +
-'<span>L <b>' + fmtPrice(lo, q.currency) + '</b></span>' +
-(q.state ? '<span>' + q.state + '</span>' : "");
-} catch (e) {
-meta.innerHTML = '<span class="err">Failed to load ' + label + ': ' + ((e && e.message) || "error") + '</span>';
-}
-}
-
-/* ---------- add / remove ---------- */
-async function addSymbol(rawInput) {
-const symbol = String(rawInput || "").trim().toUpperCase();
-if (!symbol) return;
-if (watchlist.indexOf(symbol) !== -1) {
-setBusy(false, symbol + " already in list");
-addInput.value = "";
-return;
-}
-setBusy(true, "Adding " + symbol + "…");
-try {
-const q = await getQuote(symbol, "1d", "2m");
-cache[symbol] = q;
-watchlist.push(symbol);
-saveWatchlist();
-addInput.value = "";
-const row = buildRow(symbol);
-const empty = listEl.querySelector(".empty");
-if (empty) listEl.innerHTML = "";
-listEl.appendChild(row);
-applyQuoteToRow(row, q);
-setBusy(false, "Added " + symbol);
-} catch (e) {
-setBusy(false, "Could not add " + symbol + ": " + ((e && e.message) || "not found"));
-}
-}
-
-function removeSymbol(symbol) {
-const i = watchlist.indexOf(symbol);
-if (i === -1) return;
-watchlist.splice(i, 1);
-saveWatchlist();
-const row = listEl.querySelector('.row[data-symbol="' + cssEsc(symbol) + '"]');
-if (row) row.remove();
-if (!watchlist.length) renderList();
-}
-
-/* ---------- utils ---------- */
-function cssEsc(s) {
-if (window.CSS && CSS.escape) return CSS.escape(s);
-return String(s).replace(/["\\]/g, "\\$&");
-}
-
-/* ---------- events ---------- */
-document.getElementById("addBtn").addEventListener("click", () => addSymbol(addInput.value));
-addInput.addEventListener("keydown", e => { if (e.key === "Enter") addSymbol(addInput.value); });
-document.getElementById("refreshBtn").addEventListener("click", refreshAll);
-
-window.addEventListener("resize", () => {
-// redraw open big chart + all sparklines on rotate/resize
-listEl.querySelectorAll(".row").forEach(row => {
-const q = cache[row.dataset.symbol];
-if (q) {
-const ci = changeInfo(q.price, q.prevClose);
-drawChart(row.querySelector(".spark"), q.points, ci.dir, { fill: false, lineWidth: 1.5, pad: 2 });
-}
-if (row.classList.contains("open")) {
-const active = row.querySelector(".tab.active");
-if (active) loadTimeframe(row, active.textContent);
-}
-});
-});
-
-// Refresh when tab becomes visible again, plus periodic auto-refresh.
-document.addEventListener("visibilitychange", () => {
-if (document.visibilityState === "visible") refreshAll();
-});
-setInterval(() => { if (document.visibilityState === "visible") refreshAll(); }, 30000);
-
-/* ---------- init ---------- */
-renderList();
-refreshAll();
+document.getElementById("refreshBtn").addEventListener("click", render);
+render();
 </script>
 </body>
 </html>
-
