@@ -49,6 +49,7 @@ border-radius: 8px;
 padding: 7px 12px;
 font-size: 14px;
 }
+.refresh-btn:active { background: var(--line); }
 .addbar { display: flex; gap: 8px; }
 .addbar input {
 flex: 1;
@@ -60,6 +61,7 @@ padding: 12px 14px;
 font-size: 16px;
 text-transform: uppercase;
 }
+.addbar input::placeholder { color: var(--muted); text-transform: none; }
 .addbar button {
 background: var(--accent);
 border: none;
@@ -68,6 +70,13 @@ border-radius: 10px;
 padding: 0 18px;
 font-size: 16px;
 font-weight: 600;
+}
+.addbar button:active { opacity: 0.8; }
+#status {
+font-size: 12px;
+color: var(--muted);
+margin-top: 8px;
+min-height: 14px;
 }
 #list { padding: 8px 10px; }
 .row {
@@ -96,17 +105,70 @@ margin-top: 2px;
 }
 .spark { width: 76px; height: 38px; flex: none; }
 .price-block { text-align: right; min-width: 96px; }
-.price { font-size: 16px; font-weight: 700; }
-.chg { font-size: 12px; margin-top: 2px; }
+.price { font-size: 16px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.chg { font-size: 12px; font-variant-numeric: tabular-nums; margin-top: 2px; }
 .up { color: var(--up); }
 .down { color: var(--down); }
+.tag {
+display: inline-block;
+font-size: 9px;
+font-weight: 700;
+padding: 1px 5px;
+border-radius: 4px;
+margin-left: 4px;
+vertical-align: middle;
+background: var(--card2);
+color: var(--muted);
+border: 1px solid var(--line);
+}
+.tag.pre { color: #d29922; border-color: #5a4711; }
+.tag.post { color: #a371f7; border-color: #432a72; }
 .remove {
 background: transparent;
 border: none;
 color: var(--muted);
 font-size: 20px;
+line-height: 1;
 padding: 4px 6px;
+flex: none;
 }
+.remove:active { color: var(--down); }
+.err { font-size: 12px; color: var(--down); }
+.row-detail {
+display: none;
+padding: 0 12px 14px;
+border-top: 1px solid var(--line);
+}
+.row.open .row-detail { display: block; }
+.tabs {
+display: flex;
+gap: 6px;
+margin: 12px 0;
+flex-wrap: wrap;
+}
+.tab {
+background: var(--card2);
+border: 1px solid var(--line);
+color: var(--muted);
+border-radius: 999px;
+padding: 6px 14px;
+font-size: 13px;
+}
+.tab.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+.bigchart { width: 100%; height: 180px; display: block; }
+.detail-meta {
+display: flex;
+justify-content: space-between;
+font-size: 12px;
+color: var(--muted);
+margin-top: 8px;
+flex-wrap: wrap;
+gap: 6px 16px;
+}
+.detail-meta b { color: var(--text); font-weight: 600; }
+.empty { text-align: center; color: var(--muted); padding: 40px 20px; font-size: 14px; }
+.spin { display: inline-block; animation: spin 0.8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
 </style>
 </head>
 <body>
@@ -116,136 +178,466 @@ padding: 4px 6px;
 <button class="refresh-btn" id="refreshBtn">Refresh</button>
 </div>
 <div class="addbar">
-<input id="addInput" placeholder="Add ticker (e.g. NVDA)" autocomplete="off" list="stock-suggestions" autocapitalize="characters">
+<input id="addInput" placeholder="Add ticker (e.g. NVDA)" autocomplete="off" autocapitalize="characters" spellcheck="false">
 <button id="addBtn">Add</button>
 </div>
-<datalist id="stock-suggestions"></datalist>
+<div id="status"></div>
 </header>
 <div id="list"></div>
 
 <script>
-let watchlist = JSON.parse(localStorage.getItem("stocksWatchlist")) || ["AAPL", "MSFT", "GOOGL", "NVDA", "TSLA", "SAND"];
+"use strict";
 
-const listEl = document.getElementById("list");
-const addInput = document.getElementById("addInput");
-const suggestionsDatalist = document.getElementById("stock-suggestions");
+const STORE_KEY = "stocksWatchlist";
+const DEFAULTS = ["AAPL", "MSFT", "TSLA"];
 
-const localTickerDatabase = [
-    { s: "SAND", n: "Sandstorm Gold Ltd." }, { s: "AAPL", n: "Apple Inc." },
-    { s: "MSFT", n: "Microsoft Corp." }, { s: "GOOGL", n: "Alphabet Inc." },
-    { s: "NVDA", n: "NVIDIA Corp." }, { s: "TSLA", n: "Tesla Inc." },
-    { s: "BABA", n: "Alibaba Group" }, { s: "TCEHY", n: "Tencent Holdings" },
-    { s: "SSNLF", n: "Samsung Electronics" }, { s: "CPNG", n: "Coupang Inc." },
-    { s: "AMD", n: "Advanced Micro Devices" }, { s: "NFLX", n: "Netflix Inc." },
-    { s: "AMZN", n: "Amazon.com Inc." }, { s: "META", n: "Meta Platforms" }
+// Public CORS proxies tried in order. {build:(url)=>proxiedUrl}
+const PROXIES = [
+u => "https://corsproxy.io/?url=" + encodeURIComponent(u),
+u => "https://api.allorigins.win/raw?url=" + encodeURIComponent(u),
+u => "https://thingproxy.freeboard.io/fetch/" + u,
+u => "https://api.codetabs.com/v1/proxy/?quest=" + encodeURIComponent(u),
 ];
 
-// Nova função estável e imune a bloqueios locais de CORS e sandbox do Android Chrome
-async function getQuote(symbol) {
-  try {
-    const res = await fetch(`https://stocks-mock-api.uniswap.workers.dev/ticker?symbol=${symbol}`);
-    const data = await res.json();
-    return {
-      price: data.price,
-      change: data.changePercent
-    };
-  } catch (e) {
-    // Valores de salvaguarda dinâmicos caso fiques sem rede temporariamente no telemóvel
-    const bases = {AAPL:231, MSFT:443, GOOGL:179, NVDA:142, TSLA:352, SAND:5.30};
-    const base = bases[symbol] || 180;
-    return {
-      price: base + Math.random()*5,
-      change: (Math.random()*4 - 2)
-    };
-  }
-}
-
-function drawSpark(canvas, change) {
-  const ctx = canvas.getContext("2d");
-  canvas.width = 76; canvas.height = 38;
-  ctx.strokeStyle = change >= 0 ? "#3fb950" : "#f85149";
-  ctx.lineWidth = 2.5;
-  ctx.beginPath();
-  let y = 19;
-  ctx.moveTo(0, y);
-  for (let i = 1; i < 8; i++) {
-    y += (Math.random() - 0.45) * 8 + (change > 0 ? -1 : 1);
-    y = Math.max(6, Math.min(32, y));
-    ctx.lineTo(i * 11, y);
-  }
-  ctx.stroke();
-}
-
-// Alterado para async para suportar a resolução imediata das promessas de rede
-async function renderList() {
-  listEl.innerHTML = "";
-  
-  // Executa o map em paralelo para carregar todas as ações instantaneamente
-  const promises = watchlist.map(async (symbol) => {
-    const q = await getQuote(symbol);
-    const isUp = q.change >= 0;
-    
-    const row = document.createElement("div");
-    row.className = "row";
-    row.innerHTML = `
-      <div class="row-main">
-        <div class="sym-block">
-          <div class="sym">${symbol}</div>
-          <div class="name">Live Market Data</div>
-        </div>
-        <canvas class="spark"></canvas>
-        <div class="price-block">
-          <div class="price">$${q.price.toFixed(2)}</div>
-          <div class="chg ${isUp ? 'up' : 'down'}">${isUp ? '+' : ''}${q.change.toFixed(2)}%</div>
-        </div>
-        <button class="remove">×</button>
-      </div>
-    `;
-    
-    drawSpark(row.querySelector(".spark"), q.change);
-
-    row.querySelector(".remove").onclick = (e) => {
-      e.stopPropagation();
-      watchlist = watchlist.filter(s => s !== symbol);
-      localStorage.setItem("stocksWatchlist", JSON.stringify(watchlist));
-      renderList();
-    };
-    
-    return row;
-  });
-
-  const rows = await Promise.all(promises);
-  rows.forEach(row => listEl.appendChild(row));
-}
-
-addInput.addEventListener('input', () => {
-    const query = addInput.value.trim().toUpperCase();
-    if (query.length < 1) {
-        suggestionsDatalist.innerHTML = '';
-        return;
-    }
-    const matches = localTickerDatabase.filter(item => 
-        item.s.startsWith(query) || item.n.toUpperCase().includes(query)
-    );
-    suggestionsDatalist.innerHTML = matches.slice(0, 6).map(item => 
-        `<option value="${item.s}">${item.n}</option>`
-    ).join('');
-});
-
-document.getElementById("addBtn").onclick = () => {
-  const val = addInput.value.trim().toUpperCase();
-  if (val && !watchlist.includes(val)) {
-    watchlist.push(val);
-    localStorage.setItem("stocksWatchlist", JSON.stringify(watchlist));
-    addInput.value = "";
-    suggestionsDatalist.innerHTML = "";
-    renderList();
-  }
+const TIMEFRAMES = {
+"1D": { range: "1d", interval: "2m" },
+"1W": { range: "5d", interval: "15m" },
+"1M": { range: "1mo", interval: "1d" },
+"3M": { range: "3mo", interval: "1d" },
+"1Y": { range: "1y", interval: "1d" },
 };
 
-document.getElementById("refreshBtn").onclick = renderList;
+const listEl = document.getElementById("list");
+const statusEl = document.getElementById("status");
+const addInput = document.getElementById("addInput");
 
+let watchlist = loadWatchlist();
+const cache = {}; // symbol -> last parsed quote {price, prevClose, ...}
+let working = 0;
+
+/* ---------- persistence ---------- */
+function loadWatchlist() {
+try {
+const raw = localStorage.getItem(STORE_KEY);
+if (raw) {
+const arr = JSON.parse(raw);
+if (Array.isArray(arr) && arr.length) return arr.map(s => String(s).toUpperCase());
+}
+} catch (e) {}
+return DEFAULTS.slice();
+}
+function saveWatchlist() {
+try { localStorage.setItem(STORE_KEY, JSON.stringify(watchlist)); } catch (e) {}
+}
+
+/* ---------- fetching ---------- */
+function yahooUrl(symbol, range, interval) {
+return "https://query1.finance.yahoo.com/v8/finance/chart/" +
+encodeURIComponent(symbol) +
+"?range=" + range + "&interval=" + interval + "&includePrePost=true";
+}
+
+// Fetch with proxy fallback. Returns parsed JSON or throws.
+async function fetchJson(targetUrl) {
+let lastErr;
+for (const make of PROXIES) {
+const purl = make(targetUrl);
+try {
+const res = await fetch(purl, { method: "GET" });
+if (!res.ok) { lastErr = new Error("HTTP " + res.status); continue; }
+const text = await res.text();
+let json;
+try { json = JSON.parse(text); }
+catch (e) { lastErr = new Error("Bad JSON (blocked?)"); continue; }
+if (json && json.chart) return json;
+lastErr = new Error("No data");
+} catch (e) {
+lastErr = e;
+}
+}
+throw lastErr || new Error("All proxies failed");
+}
+
+// Parse a Yahoo chart response into a friendly object.
+function parseChart(json) {
+const result = json && json.chart && json.chart.result && json.chart.result[0];
+if (!result) {
+const err = json && json.chart && json.chart.error;
+throw new Error(err && err.description ? err.description : "Unknown symbol");
+}
+const meta = result.meta || {};
+const ts = result.timestamp || [];
+const quote = (result.indicators && result.indicators.quote && result.indicators.quote[0]) || {};
+const closes = quote.close || [];
+
+// Build clean point series (drop nulls).
+const points = [];
+for (let i = 0; i < ts.length; i++) {
+const c = closes[i];
+if (c != null && isFinite(c)) points.push({ t: ts[i], c: c });
+}
+
+const state = meta.marketState || "";
+let price = meta.regularMarketPrice;
+let tag = "";
+// Extended hours: prefer latest available point as displayed price.
+if ((state === "PRE" || state === "POST" || state === "PREPRE" || state === "POSTPOST") && points.length) {
+price = points[points.length - 1].c;
+tag = state.indexOf("PRE") === 0 ? "PRE" : "POST";
+}
+if (price == null && points.length) price = points[points.length - 1].c;
+
+const prevClose = (meta.chartPreviousClose != null) ? meta.chartPreviousClose
+: (meta.previousClose != null) ? meta.previousClose
+: (points.length ? points[0].c : null);
+
+return {
+symbol: meta.symbol || "",
+name: meta.shortName || meta.longName || meta.symbol || "",
+currency: meta.currency || "",
+price: price,
+prevClose: prevClose,
+state: state,
+tag: tag,
+points: points,
+};
+}
+
+async function getQuote(symbol, range, interval) {
+const json = await fetchJson(yahooUrl(symbol, range, interval));
+return parseChart(json);
+}
+
+/* ---------- formatting ---------- */
+function fmtPrice(v, cur) {
+if (v == null || !isFinite(v)) return "--";
+const n = v >= 1000 ? v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+: v.toFixed(2);
+const sym = cur === "USD" ? "$" : "";
+return sym + n;
+}
+function changeInfo(price, prev) {
+if (price == null || prev == null || !isFinite(price) || !isFinite(prev) || prev === 0) {
+return { abs: 0, pct: 0, dir: 0, text: "--" };
+}
+const abs = price - prev;
+const pct = (abs / prev) * 100;
+const dir = abs > 0 ? 1 : abs < 0 ? -1 : 0;
+const sign = abs > 0 ? "+" : "";
+const text = sign + abs.toFixed(2) + " (" + sign + pct.toFixed(2) + "%)";
+return { abs, pct, dir, text };
+}
+
+/* ---------- charts ---------- */
+function drawChart(canvas, points, dir, opts) {
+opts = opts || {};
+const dpr = window.devicePixelRatio || 1;
+const w = canvas.clientWidth || parseInt(canvas.getAttribute("width")) || 76;
+const h = canvas.clientHeight || parseInt(canvas.getAttribute("height")) || 38;
+canvas.width = Math.round(w * dpr);
+canvas.height = Math.round(h * dpr);
+const ctx = canvas.getContext("2d");
+ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+ctx.clearRect(0, 0, w, h);
+
+if (!points || points.length < 2) {
+ctx.fillStyle = "#8b949e";
+ctx.font = "11px sans-serif";
+ctx.textAlign = "center";
+ctx.fillText("no data", w / 2, h / 2 + 4);
+return;
+}
+
+const pad = opts.pad != null ? opts.pad : 2;
+const vals = points.map(p => p.c);
+let min = Math.min.apply(null, vals);
+let max = Math.max.apply(null, vals);
+if (min === max) { min -= 1; max += 1; }
+const padTop = pad + (opts.labels ? 4 : 0);
+const padBot = pad + (opts.labels ? 4 : 0);
+const plotH = h - padTop - padBot;
+const n = points.length;
+const x = i => pad + (i / (n - 1)) * (w - pad * 2);
+const y = v => padTop + (1 - (v - min) / (max - min)) * plotH;
+
+const color = dir > 0 ? "#3fb950" : dir < 0 ? "#f85149" : "#8b949e";
+
+// baseline (previous close) for big chart
+if (opts.baseline != null && isFinite(opts.baseline) && opts.baseline >= min && opts.baseline <= max) {
+ctx.strokeStyle = "rgba(139,148,158,0.35)";
+ctx.lineWidth = 1;
+ctx.setLineDash([4, 4]);
+ctx.beginPath();
+ctx.moveTo(pad, y(opts.baseline));
+ctx.lineTo(w - pad, y(opts.baseline));
+ctx.stroke();
+ctx.setLineDash([]);
+}
+
+// fill gradient under line
+if (opts.fill) {
+const grad = ctx.createLinearGradient(0, padTop, 0, h - padBot);
+grad.addColorStop(0, dir < 0 ? "rgba(248,81,73,0.28)" : "rgba(63,185,80,0.28)");
+grad.addColorStop(1, "rgba(0,0,0,0)");
+ctx.beginPath();
+ctx.moveTo(x(0), y(points[0].c));
+for (let i = 1; i < n; i++) ctx.lineTo(x(i), y(points[i].c));
+ctx.lineTo(x(n - 1), h - padBot);
+ctx.lineTo(x(0), h - padBot);
+ctx.closePath();
+ctx.fillStyle = grad;
+ctx.fill();
+}
+
+ctx.strokeStyle = color;
+ctx.lineWidth = opts.lineWidth || 1.5;
+ctx.lineJoin = "round";
+ctx.beginPath();
+ctx.moveTo(x(0), y(points[0].c));
+for (let i = 1; i < n; i++) ctx.lineTo(x(i), y(points[i].c));
+ctx.stroke();
+}
+
+/* ---------- rendering ---------- */
+function buildRow(symbol) {
+const row = document.createElement("div");
+row.className = "row";
+row.dataset.symbol = symbol;
+row.innerHTML =
+'<div class="row-main">' +
+'<div class="sym-block">' +
+'<div class="sym">' + symbol + '</div>' +
+'<div class="name">Loading…</div>' +
+'</div>' +
+'<canvas class="spark" width="76" height="38"></canvas>' +
+'<div class="price-block">' +
+'<div class="price">--</div>' +
+'<div class="chg">&nbsp;</div>' +
+'</div>' +
+'<button class="remove" title="Remove">&times;</button>' +
+'</div>' +
+'<div class="row-detail">' +
+'<div class="tabs"></div>' +
+'<canvas class="bigchart"></canvas>' +
+'<div class="detail-meta"></div>' +
+'</div>';
+
+const main = row.querySelector(".row-main");
+const removeBtn = row.querySelector(".remove");
+
+removeBtn.addEventListener("click", e => {
+e.stopPropagation();
+removeSymbol(symbol);
+});
+
+main.addEventListener("click", () => toggleExpand(row));
+
+return row;
+}
+
+function renderList() {
+listEl.innerHTML = "";
+if (!watchlist.length) {
+listEl.innerHTML = '<div class="empty">No stocks yet. Add a ticker above.</div>';
+return;
+}
+watchlist.forEach(sym => listEl.appendChild(buildRow(sym)));
+}
+
+function applyQuoteToRow(row, q) {
+const nameEl = row.querySelector(".name");
+const priceEl = row.querySelector(".price");
+const chgEl = row.querySelector(".chg");
+const spark = row.querySelector(".spark");
+
+nameEl.textContent = q.name || row.dataset.symbol;
+nameEl.classList.remove("err");
+
+const ci = changeInfo(q.price, q.prevClose);
+priceEl.innerHTML = fmtPrice(q.price, q.currency) +
+(q.tag ? '<span class="tag ' + q.tag.toLowerCase() + '">' + q.tag + '</span>' : "");
+chgEl.textContent = ci.text;
+chgEl.className = "chg " + (ci.dir > 0 ? "up" : ci.dir < 0 ? "down" : "");
+
+drawChart(spark, q.points, ci.dir, { fill: false, lineWidth: 1.5, pad: 2 });
+}
+
+function showRowError(row, msg) {
+const nameEl = row.querySelector(".name");
+nameEl.textContent = "⚠ " + msg + " — tap to retry";
+nameEl.classList.add("err");
+}
+
+/* ---------- data flow ---------- */
+async function refreshSymbol(symbol) {
+const row = listEl.querySelector('.row[data-symbol="' + cssEsc(symbol) + '"]');
+try {
+const q = await getQuote(symbol, "1d", "2m");
+cache[symbol] = q;
+if (row) applyQuoteToRow(row, q);
+return q;
+} catch (e) {
+if (row) showRowError(row, (e && e.message) || "fetch failed");
+throw e;
+}
+}
+
+async function refreshAll() {
+if (!watchlist.length) return;
+setBusy(true, "Updating…");
+let ok = 0, fail = 0;
+// sequential to be gentle on free proxies
+for (const sym of watchlist) {
+try { await refreshSymbol(sym); ok++; }
+catch (e) { fail++; }
+}
+setBusy(false, statusLine(ok, fail));
+}
+
+function statusLine(ok, fail) {
+const now = new Date().toLocaleTimeString();
+let s = "Updated " + now;
+if (fail) s += " • " + fail + " failed (proxy may be blocked)";
+return s;
+}
+
+function setBusy(on, msg) {
+working = on ? working + 1 : Math.max(0, working - 1);
+if (msg != null) statusEl.innerHTML = (working > 0 ? '<span class="spin">↻</span> ' : "") + msg;
+}
+
+/* ---------- expand / timeframe ---------- */
+async function toggleExpand(row) {
+const open = row.classList.contains("open");
+// close others
+listEl.querySelectorAll(".row.open").forEach(r => { if (r !== row) r.classList.remove("open"); });
+if (open) { row.classList.remove("open"); return; }
+row.classList.add("open");
+
+const tabsEl = row.querySelector(".tabs");
+if (!tabsEl.dataset.built) {
+Object.keys(TIMEFRAMES).forEach((label, idx) => {
+const b = document.createElement("button");
+b.className = "tab" + (idx === 0 ? " active" : "");
+b.textContent = label;
+b.addEventListener("click", e => {
+e.stopPropagation();
+tabsEl.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+b.classList.add("active");
+loadTimeframe(row, label);
+});
+tabsEl.appendChild(b);
+});
+tabsEl.dataset.built = "1";
+}
+const active = tabsEl.querySelector(".tab.active");
+loadTimeframe(row, active ? active.textContent : "1D");
+}
+
+async function loadTimeframe(row, label) {
+const symbol = row.dataset.symbol;
+const tf = TIMEFRAMES[label] || TIMEFRAMES["1D"];
+const big = row.querySelector(".bigchart");
+const meta = row.querySelector(".detail-meta");
+meta.innerHTML = '<span class="spin">↻</span> loading ' + label + '…';
+try {
+const q = await getQuote(symbol, tf.range, tf.interval);
+if (!row.classList.contains("open")) return;
+const ci = changeInfo(q.price, q.prevClose);
+drawChart(big, q.points, ci.dir, {
+fill: true,
+lineWidth: 2,
+pad: 6,
+baseline: label === "1D" ? q.prevClose : null,
+});
+const hi = q.points.length ? Math.max.apply(null, q.points.map(p => p.c)) : null;
+const lo = q.points.length ? Math.min.apply(null, q.points.map(p => p.c)) : null;
+meta.innerHTML =
+'<span>Last <b>' + fmtPrice(q.price, q.currency) + '</b></span>' +
+'<span class="' + (ci.dir > 0 ? "up" : ci.dir < 0 ? "down" : "") + '">' + ci.text + '</span>' +
+'<span>H <b>' + fmtPrice(hi, q.currency) + '</b></span>' +
+'<span>L <b>' + fmtPrice(lo, q.currency) + '</b></span>' +
+(q.state ? '<span>' + q.state + '</span>' : "");
+} catch (e) {
+meta.innerHTML = '<span class="err">Failed to load ' + label + ': ' + ((e && e.message) || "error") + '</span>';
+}
+}
+
+/* ---------- add / remove ---------- */
+async function addSymbol(rawInput) {
+const symbol = String(rawInput || "").trim().toUpperCase();
+if (!symbol) return;
+if (watchlist.indexOf(symbol) !== -1) {
+setBusy(false, symbol + " already in list");
+addInput.value = "";
+return;
+}
+setBusy(true, "Adding " + symbol + "…");
+try {
+const q = await getQuote(symbol, "1d", "2m");
+cache[symbol] = q;
+watchlist.push(symbol);
+saveWatchlist();
+addInput.value = "";
+const row = buildRow(symbol);
+const empty = listEl.querySelector(".empty");
+if (empty) listEl.innerHTML = "";
+listEl.appendChild(row);
+applyQuoteToRow(row, q);
+setBusy(false, "Added " + symbol);
+} catch (e) {
+setBusy(false, "Could not add " + symbol + ": " + ((e && e.message) || "not found"));
+}
+}
+
+function removeSymbol(symbol) {
+const i = watchlist.indexOf(symbol);
+if (i === -1) return;
+watchlist.splice(i, 1);
+saveWatchlist();
+const row = listEl.querySelector('.row[data-symbol="' + cssEsc(symbol) + '"]');
+if (row) row.remove();
+if (!watchlist.length) renderList();
+}
+
+/* ---------- utils ---------- */
+function cssEsc(s) {
+if (window.CSS && CSS.escape) return CSS.escape(s);
+return String(s).replace(/["\\]/g, "\\$&");
+}
+
+/* ---------- events ---------- */
+document.getElementById("addBtn").addEventListener("click", () => addSymbol(addInput.value));
+addInput.addEventListener("keydown", e => { if (e.key === "Enter") addSymbol(addInput.value); });
+document.getElementById("refreshBtn").addEventListener("click", refreshAll);
+
+window.addEventListener("resize", () => {
+// redraw open big chart + all sparklines on rotate/resize
+listEl.querySelectorAll(".row").forEach(row => {
+const q = cache[row.dataset.symbol];
+if (q) {
+const ci = changeInfo(q.price, q.prevClose);
+drawChart(row.querySelector(".spark"), q.points, ci.dir, { fill: false, lineWidth: 1.5, pad: 2 });
+}
+if (row.classList.contains("open")) {
+const active = row.querySelector(".tab.active");
+if (active) loadTimeframe(row, active.textContent);
+}
+});
+});
+
+// Refresh when tab becomes visible again, plus periodic auto-refresh.
+document.addEventListener("visibilitychange", () => {
+if (document.visibilityState === "visible") refreshAll();
+});
+setInterval(() => { if (document.visibilityState === "visible") refreshAll(); }, 30000);
+
+/* ---------- init ---------- */
 renderList();
+refreshAll();
 </script>
 </body>
 </html>
+
+
+
