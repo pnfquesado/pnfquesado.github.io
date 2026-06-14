@@ -17,14 +17,16 @@ header { position: sticky; top: 0; z-index: 10; background: var(--bg); border-bo
 .row { background: var(--card); border: 1px solid var(--line); border-radius: 12px; margin-bottom: 10px; overflow: hidden; cursor: grab; }
 .row.dragging { opacity: 0.5; }
 .row-main { display: flex; align-items: center; gap: 10px; padding: 12px; cursor: pointer; }
-.spark { width: 76px; height: 38px; flex: none; }
+.sparks-wrapper { display: flex; gap: 8px; }
+.spark-box { display: flex; flex-direction: column; align-items: center; }
+.spark-box label { font-size: 8px; color: var(--muted); margin-bottom: 2px; }
+.spark { width: 50px; height: 30px; }
 .price-block { display: flex; flex-direction: column; align-items: flex-end; min-width: 160px; padding-left: 20px; }
-.price-line { font-size: 15px; font-weight: 700; }
-.chg { font-size: 12px; font-weight: 500; }
+.price-line { font-size: 14px; font-weight: 700; }
+.chg { font-size: 11px; font-weight: 500; }
 .ext-row { font-size: 11px; margin-top: 2px; color: var(--muted); }
 .up { color: var(--up); }
 .down { color: var(--down); }
-.tag { font-size: 9px; font-weight: 700; padding: 0 4px; border-radius: 4px; background: var(--card2); border: 1px solid var(--line); }
 .remove-btn { background: transparent; border: none; color: var(--muted); font-size: 20px; cursor: pointer; padding: 5px; }
 .row-detail { display: none; padding: 12px; border-top: 1px solid var(--line); }
 .row.open .row-detail { display: block; }
@@ -38,7 +40,13 @@ header { position: sticky; top: 0; z-index: 10; background: var(--bg); border-bo
 <body>
 <header>
     <div style="display:flex; justify-content:space-between; align-items:center;"><h1>Stocks</h1><button id="refreshBtn">Refresh</button></div>
-    <div class="addbar"><input id="addInput" placeholder="Add ticker"><button id="addBtn">Add</button></div>
+    <div class="addbar">
+        <input id="addInput" list="stock-suggestions" placeholder="Add ticker">
+        <datalist id="stock-suggestions">
+            <option value="AAPL">Apple</option><option value="MSFT">Microsoft</option><option value="NVDA">Nvidia</option><option value="TSLA">Tesla</option><option value="BTC-USD">Bitcoin</option><option value="ETH-USD">Ethereum</option>
+        </datalist>
+        <button id="addBtn">Add</button>
+    </div>
 </header>
 <div id="list"></div>
 
@@ -65,8 +73,7 @@ async function fetchYahoo(sym, range="1d", interval="2m") {
 function draw(canvas, data, isUp, touches = [], showGrid = false, isMini = false) {
     const ctx = canvas.getContext("2d");
     const w = canvas.width, h = canvas.height;
-    const paddingRight = showGrid ? 50 : 0;
-    const plotW = w - paddingRight;
+    const plotW = showGrid ? (w - 50) : w;
     
     ctx.clearRect(0, 0, w, h);
     const valid = data.filter(n => n);
@@ -109,7 +116,10 @@ async function render() {
         row.dataset.index = index;
         row.innerHTML = `<div class="row-main">
                             <div style="font-weight:700; flex:1">${sym}</div>
-                            <canvas class="spark" width="76" height="38"></canvas>
+                            <div class="sparks-wrapper">
+                                <div class="spark-box"><label>1D</label><canvas class="spark spark-1d" width="50" height="30"></canvas></div>
+                                <div class="spark-box"><label>YTD</label><canvas class="spark spark-ytd" width="50" height="30"></canvas></div>
+                            </div>
                             <div class="price-block">
                                 <div class="price-line">--</div>
                                 <div class="ext-row"></div>
@@ -135,18 +145,21 @@ async function render() {
         
         list.appendChild(row);
 
-        fetchYahoo(sym).then(q => {
+        fetchYahoo(sym, "1d", "2m").then(q => {
             const dayDiff = q.regPrice - q.prevClose;
             const dayPct = (dayDiff / q.prevClose) * 100;
             const isUp = dayDiff >= 0;
-            draw(row.querySelector(".spark"), q.points, isUp, [], false, true);
+            draw(row.querySelector(".spark-1d"), q.points, isUp, [], false, true);
             row.querySelector(".price-line").innerHTML = `${(q.currency==="USD"?"$":"") + q.regPrice.toFixed(2)} <span class="chg ${isUp?"up":"down"}">${dayDiff > 0 ? "+" : ""}${dayDiff.toFixed(2)} (${dayPct.toFixed(2)}%)</span>`;
             
             const extDiff = q.extPrice - q.regPrice;
             if (Math.abs(extDiff) > 0.01) {
                 const extPct = (extDiff / q.regPrice) * 100;
-                row.querySelector(".ext-row").innerHTML = `<span class="tag">EXT</span> ${(q.currency==="USD"?"$":"") + q.extPrice.toFixed(2)} <span class="${extDiff >= 0 ? "up" : "down"}">${extDiff > 0 ? "+" : ""}${extDiff.toFixed(2)} (${extPct.toFixed(2)}%)</span>`;
+                row.querySelector(".ext-row").innerHTML = `${(q.currency==="USD"?"$":"") + q.extPrice.toFixed(2)} <span class="${extDiff >= 0 ? "up" : "down"}">${extDiff > 0 ? "+" : ""}${extDiff.toFixed(2)} (${extPct.toFixed(2)}%)</span>`;
             }
+        });
+        fetchYahoo(sym, "ytd", "1d").then(q => {
+            draw(row.querySelector(".spark-ytd"), q.points, q.points[q.points.length-1] >= q.points[0], [], false, true);
         });
     });
 }
@@ -183,9 +196,8 @@ function loadDetail(row, sym) {
             const plotW = canvas.width - 50;
             for(let t of e.touches) {
                 const x = Math.max(0, Math.min(plotW, t.clientX - rect.left));
-                const idx = Math.floor((x / plotW) * currentData.length);
-                const clampedIdx = Math.max(0, Math.min(currentData.length - 1, idx));
-                pts.push({ x: x, y: canvas.height - ((currentData[clampedIdx] - Math.min(...currentData)) / (Math.max(...currentData) - Math.min(...currentData))) * canvas.height, val: currentData[clampedIdx] });
+                const idx = Math.floor((x / plotW) * (currentData.length - 1));
+                pts.push({ x: x, y: canvas.height - ((currentData[idx] - Math.min(...currentData)) / (Math.max(...currentData) - Math.min(...currentData))) * canvas.height, val: currentData[idx] });
             }
             pts.sort((a,b) => a.x - b.x);
             draw(canvas, currentData, currentData[currentData.length-1] >= currentData[0], pts, true, false);
